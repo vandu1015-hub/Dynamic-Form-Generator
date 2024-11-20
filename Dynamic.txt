@@ -1,0 +1,1076 @@
+'''Dynamic Form Generator - Types and interfaces'''
+
+// types.ts
+export interface ValidationRule {
+  pattern?: string;
+  message?: string;
+}
+
+export interface FieldOption {
+  value: string;
+  label: string;
+}
+
+export interface FormField {
+  id: string;
+  type: 'text' | 'email' | 'select' | 'radio' | 'textarea';
+  label: string;
+  required: boolean;
+  placeholder?: string;
+  validation?: ValidationRule;
+  options?: FieldOption[];
+}
+
+export interface FormSchema {
+  formTitle: string;
+  formDescription: string;
+  fields: FormField[];
+}
+
+'''app components'''
+
+import React, { useState, useCallback } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import type { FormSchema } from './types';
+
+const defaultSchema = {
+  formTitle: "Project Requirements Survey",
+  formDescription: "Please fill out this survey about your project needs",
+  fields: []
+};
+
+const App = () => {
+  const [jsonInput, setJsonInput] = useState(JSON.stringify(defaultSchema, null, 2));
+  const [schema, setSchema] = useState<FormSchema>(defaultSchema);
+  const [error, setError] = useState<string>('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const handleJsonChange = useCallback((value: string) => {
+    setJsonInput(value);
+    try {
+      const parsed = JSON.parse(value);
+      setSchema(parsed);
+      setError('');
+    } catch (e) {
+      setError('Invalid JSON format');
+    }
+  }, []);
+
+  const handleCopyJson = () => {
+    navigator.clipboard.writeText(jsonInput);
+  };
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
+  return (
+    <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-white'}`}>
+      <div className="container mx-auto p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Dynamic Form Generator
+          </h1>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopyJson}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Copy JSON
+            </button>
+            <button
+              onClick={toggleDarkMode}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Toggle Theme
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="w-full">
+            <textarea
+              value={jsonInput}
+              onChange={(e) => handleJsonChange(e.target.value)}
+              className={`w-full h-[600px] font-mono p-4 rounded border ${
+                isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-50'
+              }`}
+            />
+            {error && (
+              <Alert variant="destructive" className="mt-2">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <div className="w-full">
+            <DynamicForm schema={schema} isDarkMode={isDarkMode} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
+
+//'''dynamic from component'''
+
+
+import React, { useState, FormEvent } from 'react';
+
+// Internal type definitions
+interface ValidationRule {
+  pattern?: string;
+  message?: string;
+}
+
+interface FieldOption {
+  value: string;
+  label: string;
+}
+
+interface FormField {
+  id: string;
+  type: 'text' | 'email' | 'select' | 'radio' | 'textarea';
+  label: string;
+  required: boolean;
+  placeholder?: string;
+  validation?: ValidationRule;
+  options?: FieldOption[];
+}
+
+interface FormSchema {
+  formTitle: string;
+  formDescription: string;
+  fields: FormField[];
+}
+
+interface DynamicFormProps {
+  schema: FormSchema;
+  isDarkMode: boolean;
+}
+
+const DynamicForm: React.FC<DynamicFormProps> = ({ schema, isDarkMode }) => {
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const validateField = (field: FormField, value: string): string => {
+    if (field.required && !value) {
+      return 'This field is required';
+    }
+
+    if (field.validation?.pattern && value) {
+      const regex = new RegExp(field.validation.pattern);
+      if (!regex.test(value)) {
+        return field.validation.message || 'Invalid format';
+      }
+    }
+
+    if (field.type === 'email' && value) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        return 'Please enter a valid email address';
+      }
+    }
+
+    return '';
+  };
+
+  const handleChange = (field: FormField, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field.id]: value
+    }));
+
+    const error = validateField(field, value);
+    setErrors(prev => ({
+      ...prev,
+      [field.id]: error
+    }));
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    // Validate all fields
+    const newErrors: Record<string, string> = {};
+    schema.fields.forEach(field => {
+      const error = validateField(field, formData[field.id] || '');
+      if (error) {
+        newErrors[field.id] = error;
+      }
+    });
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Form submitted:', formData);
+      
+      // Reset form
+      setFormData({});
+      setErrors({});
+      alert('Form submitted successfully!');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const renderField = (field: FormField) => {
+    const commonClasses = `w-full p-2 rounded border ${
+      isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'
+    } ${errors[field.id] ? 'border-red-500' : 'border-gray-300'}`;
+
+    const commonProps = {
+      id: field.id,
+      value: formData[field.id] || '',
+      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => 
+        handleChange(field, e.target.value),
+      className: commonClasses,
+      placeholder: field.placeholder,
+      required: field.required
+    };
+
+    switch (field.type) {
+      case 'text':
+      case 'email':
+        return (
+          <input
+            type={field.type}
+            {...commonProps}
+          />
+        );
+
+      case 'textarea':
+        return (
+          <textarea
+            {...commonProps}
+            className={`${commonClasses} h-32`}
+          />
+        );
+
+      case 'select':
+        return (
+          <select {...commonProps}>
+            <option value="">Select an option</option>
+            {field.options?.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        );
+
+      case 'radio':
+        return (
+          <div className="space-y-2">
+            {field.options?.map(option => (
+              <label
+                key={option.value}
+                className={`flex items-center space-x-2 ${
+                  isDarkMode ? 'text-white' : 'text-gray-700'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={field.id}
+                  value={option.value}
+                  checked={formData[field.id] === option.value}
+                  onChange={e => handleChange(field, e.target.value)}
+                  className="form-radio"
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
+      <h2 className={`text-2xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+        {schema.formTitle}
+      </h2>
+      <p className={`mb-6 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+        {schema.formDescription}
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {schema.fields.map(field => (
+          <div key={field.id} className="space-y-2">
+            <label
+              htmlFor={field.id}
+              className={`block font-medium ${
+                isDarkMode ? 'text-white' : 'text-gray-700'
+              }`}
+            >
+              {field.label}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            {renderField(field)}
+            {errors[field.id] && (
+              <p className="text-red-500 text-sm">
+                {errors[field.id]}
+              </p>
+            )}
+          </div>
+        ))}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className={`w-full py-2 px-4 rounded font-medium ${
+            isSubmitting
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-500 hover:bg-blue-600'
+          } text-white transition-colors`}
+        >
+          {isSubmitting ? 'Submitting...' : 'Submit'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default DynamicForm;
+
+
+
+'''From generator tests'''
+// DynamicForm.test.tsx
+
+import { test, expect } from '@playwright/test';
+
+test('form generator renders and validates correctly', async ({ page }) => {
+  await page.goto('/');
+
+  // Check if the form title is visible
+  await expect(page.locator('h2')).toContainText('Project Requirements Survey');
+
+  // Try to submit empty form
+  await page.click('button[type="submit"]');
+  await expect(page.locator('text=This field is required')).toBeVisible();
+
+  // Fill out the form
+  await page.fill('input[type="text"]', 'John Doe');
+  await page.fill('input[type="email"]', 'john@example.com');
+  await page.selectOption('select', '1-50');
+  await page.check('input[type="radio"][value="tech"]');
+  await page.fill('textarea', 'Test comment');
+
+  // Submit form
+  await page.click('button[type="submit"]');
+
+  // Check for success message
+  await expect(page.locator('text=Form submitted successfully!')).toBeVisible();
+});
+
+test('json editor validates input', async ({ page }) => {
+  await page.goto('/');
+
+  // Input invalid JSON
+  await page.fill('textarea', '{invalid json}');
+  await expect(page.locator('text=Invalid JSON format')).toBeVisible();
+
+  // Input valid JSON
+  const validJson = JSON.stringify({
+    formTitle: "Test Form",
+    formDescription: "Test Description",
+    fields: []
+  }, null, 2);
+  
+  await page.fill('textarea', validJson);
+  await expect(page.locator('text=Invalid JSON format')).not.toBeVisible();
+});
+
+test('responsive layout works correctly', async ({ page }) => {
+  await page.goto('/');
+
+  // Test desktop layout
+  await page.setViewportSize({ width: 1200, height: 800 });
+  const desktopGrid = await page.locator('.grid').getAttribute('class');
+  expect(desktopGrid).toContain('lg:grid-cols-2');
+
+  // Test mobile layout
+  await page.setViewportSize({ width: 375, height: 800 });
+  const mobileGrid = await page.locator('.grid').getAttribute('class');
+  expect(mobileGrid).toContain('grid-cols-1');
+});
+
+// ''' bash '''
+
+npm install react-hook-form @hookform/resolvers tailwindcss @types/react @types/node
+
+
+//app component with integrated types
+
+
+import React, { useState, useCallback } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+// Define types inline
+interface ValidationRule {
+  pattern?: string;
+  message?: string;
+}
+
+interface FieldOption {
+  value: string;
+  label: string;
+}
+
+interface FormField {
+  id: string;
+  type: 'text' | 'email' | 'select' | 'radio' | 'textarea';
+  label: string;
+  required: boolean;
+  placeholder?: string;
+  validation?: ValidationRule;
+  options?: FieldOption[];
+}
+
+interface FormSchema {
+  formTitle: string;
+  formDescription: string;
+  fields: FormField[];
+}
+
+interface DynamicFormProps {
+  schema: FormSchema;
+  isDarkMode: boolean;
+}
+
+const DynamicForm: React.FC<DynamicFormProps> = ({ schema, isDarkMode }) => {
+  // ... DynamicForm component implementation remains the same ...
+};
+
+const defaultSchema: FormSchema = {
+  formTitle: "Project Requirements Survey",
+  formDescription: "Please fill out this survey about your project needs",
+  fields: []
+};
+
+const App = () => {
+  const [jsonInput, setJsonInput] = useState(JSON.stringify(defaultSchema, null, 2));
+  const [schema, setSchema] = useState<FormSchema>(defaultSchema);
+  const [error, setError] = useState<string>('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const handleJsonChange = useCallback((value: string) => {
+    setJsonInput(value);
+    try {
+      const parsed = JSON.parse(value);
+      setSchema(parsed);
+      setError('');
+    } catch (e) {
+      setError('Invalid JSON format');
+    }
+  }, []);
+
+  const handleCopyJson = () => {
+    navigator.clipboard.writeText(jsonInput);
+  };
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
+  return (
+    <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-white'}`}>
+      <div className="container mx-auto p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Dynamic Form Generator
+          </h1>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopyJson}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Copy JSON
+            </button>
+            <button
+              onClick={toggleDarkMode}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Toggle Theme
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="w-full">
+            <textarea
+              value={jsonInput}
+              onChange={(e) => handleJsonChange(e.target.value)}
+              className={`w-full h-[600px] font-mono p-4 rounded border ${
+                isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-50'
+              }`}
+            />
+            {error && (
+              <Alert variant="destructive" className="mt-2">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <div className="w-full">
+            <DynamicForm schema={schema} isDarkMode={isDarkMode} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
+
+
+// self-contained app component 
+
+import React, { useState, useCallback, FormEvent } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+interface ValidationRule {
+  pattern?: string;
+  message?: string;
+}
+
+interface FieldOption {
+  value: string;
+  label: string;
+}
+
+interface FormField {
+  id: string;
+  type: 'text' | 'email' | 'select' | 'radio' | 'textarea';
+  label: string;
+  required: boolean;
+  placeholder?: string;
+  validation?: ValidationRule;
+  options?: FieldOption[];
+}
+
+interface FormSchema {
+  formTitle: string;
+  formDescription: string;
+  fields: FormField[];
+}
+
+const DynamicForm: React.FC<{ schema: FormSchema; isDarkMode: boolean }> = ({ 
+  schema, 
+  isDarkMode 
+}) => {
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const validateField = (field: FormField, value: string): string => {
+    if (field.required && !value) {
+      return 'This field is required';
+    }
+
+    if (field.validation?.pattern && value) {
+      const regex = new RegExp(field.validation.pattern);
+      if (!regex.test(value)) {
+        return field.validation.message || 'Invalid format';
+      }
+    }
+
+    if (field.type === 'email' && value) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        return 'Please enter a valid email address';
+      }
+    }
+
+    return '';
+  };
+
+  const handleChange = (field: FormField, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field.id]: value
+    }));
+
+    const error = validateField(field, value);
+    setErrors(prev => ({
+      ...prev,
+      [field.id]: error
+    }));
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    const newErrors: Record<string, string> = {};
+    schema.fields.forEach(field => {
+      const error = validateField(field, formData[field.id] || '');
+      if (error) {
+        newErrors[field.id] = error;
+      }
+    });
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Form submitted:', formData);
+      setFormData({});
+      setErrors({});
+      alert('Form submitted successfully!');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const renderField = (field: FormField) => {
+    const commonClasses = `w-full p-2 rounded border ${
+      isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'
+    } ${errors[field.id] ? 'border-red-500' : 'border-gray-300'}`;
+
+    switch (field.type) {
+      case 'text':
+      case 'email':
+        return (
+          <input
+            type={field.type}
+            placeholder={field.placeholder}
+            value={formData[field.id] || ''}
+            onChange={(e) => handleChange(field, e.target.value)}
+            className={commonClasses}
+          />
+        );
+
+      case 'textarea':
+        return (
+          <textarea
+            placeholder={field.placeholder}
+            value={formData[field.id] || ''}
+            onChange={(e) => handleChange(field, e.target.value)}
+            className={`${commonClasses} h-32`}
+          />
+        );
+
+      case 'select':
+        return (
+          <select
+            value={formData[field.id] || ''}
+            onChange={(e) => handleChange(field, e.target.value)}
+            className={commonClasses}
+          >
+            <option value="">Select an option</option>
+            {field.options?.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        );
+
+      case 'radio':
+        return (
+          <div className="space-y-2">
+            {field.options?.map(option => (
+              <label
+                key={option.value}
+                className={`flex items-center space-x-2 ${
+                  isDarkMode ? 'text-white' : 'text-gray-700'
+                }`}
+              >
+                <input
+                  type="radio"
+                  value={option.value}
+                  checked={formData[field.id] === option.value}
+                  onChange={(e) => handleChange(field, e.target.value)}
+                  className="form-radio"
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
+      <h2 className={`text-2xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+        {schema.formTitle}
+      </h2>
+      <p className={`mb-6 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+        {schema.formDescription}
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {schema.fields.map(field => (
+          <div key={field.id} className="space-y-2">
+            <label
+              htmlFor={field.id}
+              className={`block font-medium ${
+                isDarkMode ? 'text-white' : 'text-gray-700'
+              }`}
+            >
+              {field.label}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            {renderField(field)}
+            {errors[field.id] && (
+              <p className="text-red-500 text-sm">
+                {errors[field.id]}
+              </p>
+            )}
+          </div>
+        ))}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className={`w-full py-2 px-4 rounded font-medium ${
+            isSubmitting
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-500 hover:bg-blue-600'
+          } text-white transition-colors`}
+        >
+          {isSubmitting ? 'Submitting...' : 'Submit'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+const defaultSchema: FormSchema = {
+  formTitle: "Project Requirements Survey",
+  formDescription: "Please fill out this survey about your project needs",
+  fields: []
+};
+
+const App = () => {
+  const [jsonInput, setJsonInput] = useState(JSON.stringify(defaultSchema, null, 2));
+  const [schema, setSchema] = useState<FormSchema>(defaultSchema);
+  const [error, setError] = useState<string>('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const handleJsonChange = useCallback((value: string) => {
+    setJsonInput(value);
+    try {
+      const parsed = JSON.parse(value);
+      setSchema(parsed);
+      setError('');
+    } catch (e) {
+      setError('Invalid JSON format');
+    }
+  }, []);
+
+  const handleCopyJson = () => {
+    navigator.clipboard.writeText(jsonInput);
+  };
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
+  return (
+    <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-white'}`}>
+      <div className="container mx-auto p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Dynamic Form Generator
+          </h1>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopyJson}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Copy JSON
+            </button>
+            <button
+              onClick={toggleDarkMode}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Toggle Theme
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="w-full">
+            <textarea
+              value={jsonInput}
+              onChange={(e) => handleJsonChange(e.target.value)}
+              className={`w-full h-[600px] font-mono p-4 rounded border ${
+                isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-50'
+              }`}
+            />
+            {error && (
+              <Alert variant="destructive" className="mt-2">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <div className="w-full">
+            <DynamicForm schema={schema} isDarkMode={isDarkMode} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
+
+
+// '''dynamic from component with native from handling'''
+
+
+import React, { useState, FormEvent } from 'react';
+
+// Internal type definitions
+interface ValidationRule {
+  pattern?: string;
+  message?: string;
+}
+
+interface FieldOption {
+  value: string;
+  label: string;
+}
+
+interface FormField {
+  id: string;
+  type: 'text' | 'email' | 'select' | 'radio' | 'textarea';
+  label: string;
+  required: boolean;
+  placeholder?: string;
+  validation?: ValidationRule;
+  options?: FieldOption[];
+}
+
+interface FormSchema {
+  formTitle: string;
+  formDescription: string;
+  fields: FormField[];
+}
+
+interface DynamicFormProps {
+  schema: FormSchema;
+  isDarkMode: boolean;
+}
+
+const DynamicForm: React.FC<DynamicFormProps> = ({ schema, isDarkMode }) => {
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const validateField = (field: FormField, value: string): string => {
+    if (field.required && !value) {
+      return 'This field is required';
+    }
+
+    if (field.validation?.pattern && value) {
+      const regex = new RegExp(field.validation.pattern);
+      if (!regex.test(value)) {
+        return field.validation.message || 'Invalid format';
+      }
+    }
+
+    if (field.type === 'email' && value) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        return 'Please enter a valid email address';
+      }
+    }
+
+    return '';
+  };
+
+  const handleChange = (field: FormField, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field.id]: value
+    }));
+
+    const error = validateField(field, value);
+    setErrors(prev => ({
+      ...prev,
+      [field.id]: error
+    }));
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    // Validate all fields
+    const newErrors: Record<string, string> = {};
+    schema.fields.forEach(field => {
+      const error = validateField(field, formData[field.id] || '');
+      if (error) {
+        newErrors[field.id] = error;
+      }
+    });
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Form submitted:', formData);
+      
+      // Reset form
+      setFormData({});
+      setErrors({});
+      alert('Form submitted successfully!');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const renderField = (field: FormField) => {
+    const commonClasses = `w-full p-2 rounded border ${
+      isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'
+    } ${errors[field.id] ? 'border-red-500' : 'border-gray-300'}`;
+
+    const commonProps = {
+      id: field.id,
+      value: formData[field.id] || '',
+      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => 
+        handleChange(field, e.target.value),
+      className: commonClasses,
+      placeholder: field.placeholder,
+      required: field.required
+    };
+
+    switch (field.type) {
+      case 'text':
+      case 'email':
+        return (
+          <input
+            type={field.type}
+            {...commonProps}
+          />
+        );
+
+      case 'textarea':
+        return (
+          <textarea
+            {...commonProps}
+            className={`${commonClasses} h-32`}
+          />
+        );
+
+      case 'select':
+        return (
+          <select {...commonProps}>
+            <option value="">Select an option</option>
+            {field.options?.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        );
+
+      case 'radio':
+        return (
+          <div className="space-y-2">
+            {field.options?.map(option => (
+              <label
+                key={option.value}
+                className={`flex items-center space-x-2 ${
+                  isDarkMode ? 'text-white' : 'text-gray-700'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={field.id}
+                  value={option.value}
+                  checked={formData[field.id] === option.value}
+                  onChange={e => handleChange(field, e.target.value)}
+                  className="form-radio"
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
+      <h2 className={`text-2xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+        {schema.formTitle}
+      </h2>
+      <p className={`mb-6 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+        {schema.formDescription}
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {schema.fields.map(field => (
+          <div key={field.id} className="space-y-2">
+            <label
+              htmlFor={field.id}
+              className={`block font-medium ${
+                isDarkMode ? 'text-white' : 'text-gray-700'
+              }`}
+            >
+              {field.label}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            {renderField(field)}
+            {errors[field.id] && (
+              <p className="text-red-500 text-sm">
+                {errors[field.id]}
+              </p>
+            )}
+          </div>
+        ))}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className={`w-full py-2 px-4 rounded font-medium ${
+            isSubmitting
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-500 hover:bg-blue-600'
+          } text-white transition-colors`}
+        >
+          {isSubmitting ? 'Submitting...' : 'Submit'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default DynamicForm;
+
+
+
+
+
